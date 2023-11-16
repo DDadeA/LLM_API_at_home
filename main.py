@@ -1,5 +1,8 @@
-from typing import Union
 from fastapi import FastAPI
+
+from typing import Union
+from typing import Optional
+from pydantic import BaseModel
 
 from configparser import ConfigParser
 
@@ -69,20 +72,20 @@ def make_prompt_for_chang(history:list) -> str:
         prompt += f'{line[0]}:{line[1]}\n'
         
         # ADD eos token at the end of the bot's answer.
-        if (line[0]=='B'): prompt+='<|endoftext|>'
+        if (line[0]=='A'): prompt+='<|endoftext|>'
     
     return prompt
 
-def get_answer(question:str, history:list=[], *args, **kwargs):
+def get_answer(question:str, history:list=[]):
     
     # Append the question to the chat history
-    history.append(['A', question])
+    history.append(['B', question])
     
     # Get answer and append it to the chat history.
     answer = generate(tokenizer, model, make_prompt_for_chang(history)).split('\nA:')[-1]
-    history.append(['B', answer])
+    history.append(['A', answer])
     
-    return answer, history
+    return answer.replace('\n',''), history
 
 
 # if not __name__== '__main__':
@@ -102,16 +105,21 @@ tokenizer, model = load_model(config)
 # Start api server
 app = FastAPI()
 
+class Data(BaseModel):
+    question: str
+    history: Optional[list] = []
+    
 
 @app.get("/")
 def hello_world():
     return {"Hello": "World"}
 
-@app.get("/chat/{question}")
-def chat(question:str, history:list=[]):
-    
+@app.post("/chat/")
+async def chat(data:Data):
+    print(f"\t > POST - {data}")
+
     # Get answer and updated chat history
-    answer, history = get_answer(question, history)
+    answer, history = get_answer(data.question, data.history)
     
     # Return it. "answer" should be str type.
     return {"answer": f"{answer}",
